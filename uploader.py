@@ -12,7 +12,8 @@ if not os.path.exists("./uploader_logs"):
     os.makedirs("./uploader_logs")
 
 # Redirect stdout to log file
-sys.stdout = open(f"./uploader_logs/log_{datetime.now()}.txt", "w")
+current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+sys.stdout = open(f"./uploader_logs/log_{current_time}.txt", "w")
 
 MB = 1024 * 1024
 s3 = boto3.resource("s3")
@@ -74,7 +75,7 @@ def upload_with_chunksize_and_meta(
     """
     transfer_callback = TransferCallback(file_size_mb)
 
-    config = TransferConfig(multipart_chunksize=5)
+    config = TransferConfig(multipart_chunksize=50)
     extra_args = {"Metadata": metadata} if metadata else None
     s3.Bucket(bucket_name).upload_file(
         local_file_path,
@@ -101,7 +102,7 @@ def check_for_stop():
 def scan_dir_for_files(dir_path):
     print(f"Scanning directory {dir_path}")
     for file_name in os.listdir(dir_path):
-        time.sleep(2)
+        time.sleep(1)
 
         # Check if stop file indicates that uploader should stop
         if check_for_stop():
@@ -120,13 +121,13 @@ def scan_dir_for_files(dir_path):
             scan_dir_for_files(file_path)
 
         # Upload file if it is a zip file
-        if file_path.endswith(".zip"):
+        if file_path.endswith(".zip") or file_path.endswith(".tar.gz"):
             print(f"{datetime.now()} - Uploading {file_path} to Amazon S3 bucket {bucket_name}")
             file_stats = os.stat(file_path)
             file_size_in_mb = file_stats.st_size / (1024 * 1024)
             print(f'File Size in MegaBytes is {file_size_in_mb}')
-            # upload_with_chunksize_and_meta(file_path, bucket_name, file_path, file_size_in_mb)
+            upload_with_chunksize_and_meta(file_path, bucket_name, file_path, file_size_in_mb)
 
-scan_dir_for_files("example_dir")
+scan_dir_for_files("backups")
 
 sys.stdout.close()
