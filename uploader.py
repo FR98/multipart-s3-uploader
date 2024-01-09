@@ -17,6 +17,7 @@ sys.stdout = open(f"./uploader_logs/log_{current_time}.txt", "w")
 
 MB = 1024 * 1024
 s3 = boto3.resource("s3")
+s3_client = boto3.client("s3")
 
 
 class TransferCallback:
@@ -59,9 +60,7 @@ class TransferCallback:
             )
             sys.stdout.flush()
 
-def upload_with_chunksize_and_meta(
-    local_file_path, bucket_name, object_key, file_size_mb, metadata=None
-):
+def upload_with_chunksize_and_meta(local_file_path, bucket_name, object_key, file_size_mb, metadata=None):
     """
     Upload a file from a local folder to an Amazon S3 bucket, setting a
     multipart chunk size and adding metadata to the Amazon S3 object.
@@ -87,7 +86,7 @@ def upload_with_chunksize_and_meta(
     return transfer_callback.thread_info
 
 
-bucket_name = ""
+bucket_name = "backups-uploader-poc"
 
 
 def check_for_stop():
@@ -120,14 +119,27 @@ def scan_dir_for_files(dir_path):
         if os.path.isdir(file_path):
             scan_dir_for_files(file_path)
 
+        # Check if file already exists in bucket
+        try:
+            current_object_exists = s3_client.get_object(Bucket=bucket_name, Key=file_path)
+        except:
+            current_object_exists = None
+
+        if current_object_exists:
+            print(f"{datetime.now()} - File {file_path} already exists in bucket {bucket_name}")
+            continue
+
         # Upload file if it is a zip file
         if file_path.endswith(".zip") or file_path.endswith(".tar.gz"):
             print(f"{datetime.now()} - Uploading {file_path} to Amazon S3 bucket {bucket_name}")
             file_stats = os.stat(file_path)
             file_size_in_mb = file_stats.st_size / (1024 * 1024)
             print(f'File Size in MegaBytes is {file_size_in_mb}')
-            upload_with_chunksize_and_meta(file_path, bucket_name, file_path, file_size_in_mb)
+            try:
+                upload_with_chunksize_and_meta(file_path, bucket_name, file_path, file_size_in_mb)
+            except Exception as e:
+                print(f"Error uploading file {file_path} to bucket {bucket_name}: {e}")
 
-scan_dir_for_files("backups")
+scan_dir_for_files("backups_example_dir")
 
 sys.stdout.close()
